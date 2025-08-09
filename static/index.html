@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok View Bot</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            margin: 0;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            color: #333;
+        }
+        h1 {
+            color: #ff2d55;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        p {
+            font-size: 1.1em;
+            color: #555;
+        }
+        input, button {
+            margin: 12px;
+            padding: 14px;
+            font-size: 16px;
+            border-radius: 8px;
+            width: calc(100% - 28px);
+            max-width: 400px;
+            box-sizing: border-box;
+            transition: all 0.3s;
+        }
+        input {
+            border: 1px solid #ccc;
+        }
+        input:focus {
+            border: 1px solid #ff2d55;
+            outline: none;
+        }
+        button {
+            background: #ff2d55;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #e0264b;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .error {
+            color: #ff2d55;
+            font-weight: bold;
+            min-height: 24px;
+        }
+        #status {
+            font-size: 18px;
+            margin: 20px 0;
+            color: #333;
+        }
+        #updates {
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            margin: 20px auto;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            font-size: 14px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .update {
+            margin: 5px 0;
+            color: #333;
+        }
+        #browser-view {
+            margin: 20px auto;
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #ff2d55;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            display: block;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+                margin: 10px;
+            }
+            input, button, #browser-view {
+                width: calc(100% - 20px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TikTok View Bot</h1>
+        <p>Enter a TikTok video URL and number of views (1-1000).</p>
+        <input type="text" id="url" placeholder="TikTok Video URL" required>
+        <input type="number" id="views" placeholder="Number of Views (1-1000)" min="1" max="1000" required>
+        <button id="start">Start Bot</button>
+        <div id="error" class="error"></div>
+        <div id="status"></div>
+        <div id="updates"></div>
+        <img id="browser-view" src="" alt="Headless Browser View">
+    </div>
+    <script>
+        const socket = io();
+        const urlInput = document.getElementById('url');
+        const viewsInput = document.getElementById('views');
+        const startButton = document.getElementById('start');
+        const errorDiv = document.getElementById('error');
+        const statusDiv = document.getElementById('status');
+        const updatesDiv = document.getElementById('updates');
+        const browserView = document.getElementById('browser-view');
+
+        startButton.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            const views = parseInt(viewsInput.value);
+
+            if (!url.startsWith('https://www.tiktok.com/')) {
+                errorDiv.textContent = 'Please enter a valid TikTok URL starting with https://www.tiktok.com/';
+                return;
+            }
+            if (isNaN(views) || views < 1 || views > 1000) {
+                errorDiv.textContent = 'Views must be between 1 and 1000';
+                return;
+            }
+
+            errorDiv.textContent = '';
+            statusDiv.textContent = `Starting bot for ${url} with ${views} views...`;
+            updatesDiv.innerHTML = '';
+            browserView.src = '';
+            startButton.disabled = true;
+
+            const response = await fetch('/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, views, socketId: socket.id })
+            });
+
+            if (!response.ok) {
+                errorDiv.textContent = 'Failed to start bot. Check the URL and try again.';
+                startButton.disabled = false;
+            }
+        });
+
+        socket.on('bot_update', (data) => {
+            const updateElement = document.createElement('p');
+            updateElement.className = 'update';
+            updateElement.textContent = data.message;
+            updatesDiv.appendChild(updateElement);
+            updatesDiv.scrollTop = updatesDiv.scrollHeight;
+            if (data.message.includes('Bot finished') || data.message.includes('Error on view')) {
+                startButton.disabled = false;
+            }
+        });
+
+        socket.on('screenshot', (data) => {
+            browserView.src = `data:image/png;base64,${data.image}`;
+        });
+
+        socket.on('connect', () => {
+            updatesDiv.innerHTML += '<p class="update">Connected to server</p>';
+        });
+
+        socket.on('disconnect', () => {
+            updatesDiv.innerHTML += '<p class="update">Disconnected from server</p>';
+            startButton.disabled = false;
+        });
+    </script>
+</body>
+</html>
